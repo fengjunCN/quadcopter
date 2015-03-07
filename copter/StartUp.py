@@ -176,11 +176,12 @@ def NetworkSoket(status):
 		s.bind((HOST, PORT))
 	except socket.error as msg:
 		logging.debug('Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1])
+		status["start"] = 0
 		raise
 	     
 	print 'Socket bind complete'
 	#Start listening on socket
-	S.listen(10)
+	s.listen(10)
 	logging.debug('Socket now listening')
 	 
 	#now keep talking with the client
@@ -189,10 +190,17 @@ def NetworkSoket(status):
 	while 1:
 		#Receiving from client
 		data = conn.recv(1024)
-		reply = 'OK...' + data
+		data = data.rstrip()
+		print data
 		if not data:
 		    break
-		
+		reply = "invalid\n\n"
+		if data == "stop":
+			reply = "OK...\n\n"
+			s.close()
+			status["start"] = 0
+		if data == "status":
+			reply = "Running: " + str(status["start"]) + "\nPropeller 1:" + str(status["PropValue"][0]) + "\nPropeller 2:" + str(status["PropValue"][1]) + "\nPropeller 3:" + str(status["PropValue"][2]) + "\nPropeller 4:" + str(status["PropValue"][3]) + "\n...End\n\n"
 		conn.sendall(reply)
 
 	S.close()
