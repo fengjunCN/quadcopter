@@ -9,6 +9,7 @@ import RTIMU
 import os.path
 import math
 from Adafruit_PWM_Servo_Driver import PWM
+import socket
 
 def ReadSensor(status):
 	SETTINGS_FILE = "RTIMULib"
@@ -162,6 +163,40 @@ def ReadInput(status):
 		elif input == "s":
 			status["throttle"] -= 1
 			
+def NetworkSoket(status):
+	logging.debug('Starting Up Networks socket')
+	HOST = ''   # Symbolic name, meaning all available interfaces
+	PORT = 16016 # Arbitrary non-privileged port
+	 
+	s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	logging.debug('Socket Created')
+	 
+	#Bind socket to local host and port
+	try:
+		s.bind((HOST, PORT))
+	except socket.error as msg:
+		logging.debug('Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1])
+		raise
+	     
+	print 'Socket bind complete'
+	#Start listening on socket
+	S.listen(10)
+	logging.debug('Socket now listening')
+	 
+	#now keep talking with the client
+	conn, addr = s.accept()
+	logging.debug('Connected with ' + addr[0] + ':' + str(addr[1]))
+	while 1:
+		#Receiving from client
+		data = conn.recv(1024)
+		reply = 'OK...' + data
+		if not data:
+		    break
+		
+		conn.sendall(reply)
+
+	S.close()
+
 def CAM(status):
 	logging.debug('CAM, Thread ReadInput')
 	while status["start"]:
@@ -184,6 +219,7 @@ try:
 	thread.start_new_thread( ControlProps, (status, ) )
 	thread.start_new_thread( ReadInput, (status, ) )
 	thread.start_new_thread( CAM, (status, ) )
+	thread.start_new_thread( NetworkSoket, (status, ) )
 except:
 	logging.warning('Main: WARNNG a thread gave back some error')
 
