@@ -67,7 +67,7 @@ def PrintData(status):
 	logging.debug('ReadSensor, Thread PrintData')
 	while status["start"]:
 		time.sleep(1)
-		logging.debug('PrintData, Loop')
+		#logging.debug('PrintData, Loop')
 		#for i in status:
 			#print str(i) + " :" + str(status[i])
 
@@ -76,7 +76,7 @@ def CalcProps(status):
 	servoMax = 650  # Max pulse length out of 4096
 	print "CalcProps gestartet"
 	time.sleep(1)
-	gyroy = [0,0]
+	gyroy = [0,0,0,0,0,0]
 	try:
 		while status["start"]:
 			del gyroy[0]
@@ -85,32 +85,40 @@ def CalcProps(status):
 			for i in gyroy:
 				y += i
 			y /= len(gyroy)
-			#make the counterforce much less powerfull if negative
-			if y > status["gyro-y"]:
-				#y = 0	
-				y = status["gyro-y"] / 4
+			
+			vr = y
+
+			vl = y * -1
+
+			if status["gyro-y"] < vr:
+				vr /= 4
 			else:
-				y /= 2	
-
-			valuey = y
-
-			#prevent to much force
-			if valuey > 4:
-				valuey = 4
-			if valuey < -4:
-				valuey = -4
+				if vr > 0:
+					vr /= 2
+				else:
+					vr = 0
+			if (status["gyro-y"] * -1) < vl:
+				vl /= 4
+			else:
+				if vl > 0:
+					vl /= 2 
+				else:
+					vl = 0
+			#print str(vl) + "...." + str(status["gyro-y"] * -1) + "::::::" + str(vr) + "...." + str(status["gyro-y"])
+			hr = 0
+			hl = 0
 
 			if status["throttle"] < 0:
 				status["throttle"] = 0
 
-			prop1 = (valuey * -1) + servoMin + status["throttle"]
-			prop2 = valuey + servoMin + status["throttle"]
-			prop3 = (valuey * -1) + servoMin + status["throttle"]
-			prop4 = valuey + servoMin + status["throttle"]
+			prop1 = vr + servoMin + status["throttle"]
+			prop2 = vl + servoMin + status["throttle"]
+			prop3 = hr + servoMin + status["throttle"] * 0
+			prop4 = hl + servoMin + status["throttle"] * 0
 			status["PropValue"] = [prop1, prop2, prop3, prop4]
-			logging.debug("valuey: " + str(valuey) + " ,resulting to prop2: " + str(prop2))
+			#logging.debug("valuey: " + str(valuey) + " ,resulting to prop2: " + str(prop2))
 			#logging.debug( "1: " + str(status["PropValue"][0])  + " 2: " + str(status["PropValue"][1])+ " 3: " + str(status["PropValue"][2]) + " 4: " + str(status["PropValue"][3]))
-			time.sleep(0.01)
+			time.sleep(0.001)
 		return
 	except:
 		print "Fuck!!"
@@ -129,11 +137,11 @@ def ControlProps(status):
 				print("Propeller 1:" + str(status["PropValue"][0]) + " Propeller 2:" + str(status["PropValue"][1]) + " Propeller 3:" + str(status["PropValue"][2]) + " Propeller 4:" + str(status["PropValue"][3]))
 				time.sleep(0.1)
 			else:
-				time.sleep(0.02) #makes no sence to control prop more often with 50Hz
-				#pwm.setPWM(0, 0, int(status["PropValue"][0]))
+				time.sleep(0.002) #makes no sence to control prop more often with 50Hz
+				pwm.setPWM(0, 0, int(status["PropValue"][0]))
 				pwm.setPWM(1, 0, int(status["PropValue"][1]))
 				#pwm.setPWM(2, 0, int(status["PropValue"][2]))
-				pwm.setPWM(3, 0, int(status["PropValue"][3]))
+				#pwm.setPWM(3, 0, int(status["PropValue"][3]))
 
 		print "Stopping Motors"
 		pwm.setPWM(0, 0, 180)
@@ -153,7 +161,7 @@ def ControlProps(status):
 
 def ReadInput(status):
 	logging.debug('ReadInput, Thread ReadInput')
-	while 1:
+	while status["start"]:
 		logging.debug('ReadInput, Loop')
 		input = raw_input("Please insert your command: ")
 		print "Got command: " + str(input)
@@ -169,6 +177,10 @@ def ReadInput(status):
 			throttle = raw_input("Insert throttle position: ")
 			print "Got throttle: " + str(input)
 			status["throttle"] = int(throttle)
+		elif input == "a":
+			status["pitch"] += 1
+		elif input == "d":
+			status["pitch"] -= 1
 		elif input == "w":
 			status["throttle"] += 1
 		elif input == "s":
@@ -244,7 +256,7 @@ def NetworkSoket(status):
 	#now keep talking with the client
 	conn, addr = s.accept()
 	logging.debug('Connected with ' + addr[0] + ':' + str(addr[1]))
-	while 1:
+	while status["start"]:
 		#Receiving from client
 		data = conn.recv(1024)
 		data = data.rstrip()
@@ -266,7 +278,7 @@ def CAM(status):
 	logging.debug('CAM, Thread ReadInput')
 	while status["start"]:
 		time.sleep(1)
-		logging.debug('CAM, Loop')
+		#logging.debug('CAM, Loop')
 	return
 
 status={}
@@ -275,12 +287,13 @@ logging.debug('Main: Started Up')
 status["debug"] = 0
 status["start"] = 1
 status["throttle"] = 15
+status["pitch"] = 0
 # check stare of vpn tunnel MUST be online
 
 try:
 	thread.start_new_thread( ReadSensor, (status, ) )
 	thread.start_new_thread( CalcProps, (status, ) )
-	thread.start_new_thread( PrintData, (status, ) )
+	#thread.start_new_thread( PrintData, (status, ) )
 	thread.start_new_thread( ControlProps, (status, ) )
 	thread.start_new_thread( ReadInput, (status, ) )
 	thread.start_new_thread( CAM, (status, ) )
@@ -291,6 +304,5 @@ try:
 	quit()
 except:
 	logging.warning('Main: WARNNG a thread gave back some error')
+	quit()
 
-while 1:
-   pass
