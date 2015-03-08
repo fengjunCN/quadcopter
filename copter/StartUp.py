@@ -46,8 +46,8 @@ def ReadSensor(status):
 				print "Emergency stop!"
 
 		
-		time.sleep(0.001)
-		logging.debug("Sensor Loop: x: " + str(status["gyro-x"]) + " y: " + str(status["gyro-y"]) + " z: " + str(status["gyro-z"]))
+		#time.sleep(0.001)
+		#logging.debug("Sensor Loop: x: " + str(status["gyro-x"]) + " y: " + str(status["gyro-y"]) + " z: " + str(status["gyro-z"]))
 		#GPS
 		#altitude by barometric sensor
 		#read altitude by google api
@@ -76,7 +76,7 @@ def CalcProps(status):
 	servoMax = 650  # Max pulse length out of 4096
 	print "CalcProps gestartet"
 	time.sleep(1)
-	gyroy = [0,0,0,0]
+	gyroy = [0,0]
 	try:
 		while status["start"]:
 			del gyroy[0]
@@ -84,26 +84,33 @@ def CalcProps(status):
 			y = 0
 			for i in gyroy:
 				y += i
-			y /= 4
-			
+			y /= len(gyroy)
+			#make the counterforce much less powerfull if negative
+			if y > status["gyro-y"]:
+				#y = 0	
+				y = status["gyro-y"] / 4
+			else:
+				y /= 2	
+
+			valuey = y
+
+			#prevent to much force
+			if valuey > 4:
+				valuey = 4
+			if valuey < -4:
+				valuey = -4
+
 			if status["throttle"] < 0:
 				status["throttle"] = 0
-			valuey = y / 180.0 * 200
-			
-			tmpy = (valuey * -1 )
-			if valuey < 0:
-				valuey = 0
-			if tmpy < 0:
-				tmpy = 0
 
-
-			prop1 = tmpy + servoMin + status["throttle"]
+			prop1 = (valuey * -1) + servoMin + status["throttle"]
 			prop2 = valuey + servoMin + status["throttle"]
-			prop3 = 0
-			prop4 = 0
+			prop3 = (valuey * -1) + servoMin + status["throttle"]
+			prop4 = valuey + servoMin + status["throttle"]
 			status["PropValue"] = [prop1, prop2, prop3, prop4]
+			logging.debug("valuey: " + str(valuey) + " ,resulting to prop2: " + str(prop2))
 			#logging.debug( "1: " + str(status["PropValue"][0])  + " 2: " + str(status["PropValue"][1])+ " 3: " + str(status["PropValue"][2]) + " 4: " + str(status["PropValue"][3]))
-			time.sleep(0.001)
+			time.sleep(0.01)
 		return
 	except:
 		print "Fuck!!"
@@ -122,10 +129,10 @@ def ControlProps(status):
 				print("Propeller 1:" + str(status["PropValue"][0]) + " Propeller 2:" + str(status["PropValue"][1]) + " Propeller 3:" + str(status["PropValue"][2]) + " Propeller 4:" + str(status["PropValue"][3]))
 				time.sleep(0.1)
 			else:
-				time.sleep(0.001)
-				pwm.setPWM(0, 0, int(status["PropValue"][0]))
+				time.sleep(0.02) #makes no sence to control prop more often with 50Hz
+				#pwm.setPWM(0, 0, int(status["PropValue"][0]))
 				pwm.setPWM(1, 0, int(status["PropValue"][1]))
-				pwm.setPWM(2, 0, int(status["PropValue"][2]))
+				#pwm.setPWM(2, 0, int(status["PropValue"][2]))
 				pwm.setPWM(3, 0, int(status["PropValue"][3]))
 
 		print "Stopping Motors"
@@ -134,11 +141,15 @@ def ControlProps(status):
 		pwm.setPWM(2, 0, 180)
 		pwm.setPWM(3, 0, 180)
 	except KeyboardInterrupt:
-		pwm.setPWM(0, 0, ServoMin)
+		pwm.setPWM(0, 0, 180)
+		pwm.setPWM(1, 0, 180)
+		pwm.setPWM(2, 0, 180)
+		pwm.setPWM(3, 0, 180)
 		print "Reset Servo!!"
 		raise
 	except:
 		raise
+	return
 
 def ReadInput(status):
 	logging.debug('ReadInput, Thread ReadInput')
@@ -162,6 +173,52 @@ def ReadInput(status):
 			status["throttle"] += 1
 		elif input == "s":
 			status["throttle"] -= 1
+		elif input == "test":
+			status["throttle"] = 10
+			print "Set Trottle to 10"
+			time.sleep(0.5)
+			status["throttle"] = 100
+			print "Set Trottle to 100"
+			time.sleep(0.5)
+			status["throttle"] = 10
+			print "Set Trottle to 10"
+			time.sleep(0.5)
+			status["throttle"] = 100
+			print "Set Trottle to 100"
+			time.sleep(0.5)
+			status["throttle"] = 10
+			print "Set Trottle to 10"
+			time.sleep(0.5)
+			status["throttle"] = 100
+			print "Set Trottle to 100"
+			time.sleep(0.5)
+			status["throttle"] = 10
+			print "Set Trottle to 10"
+			time.sleep(1)
+		elif input == "esc-reset":
+			print "Disconnect ESC from Controller and power"
+			print "Press 'y' when done"
+			input = raw_input("Done?: ")
+			status["start"] = 0
+			time.sleep(2)
+			if input == "y":
+				pwm = PWM(0x40)
+				pwm.setPWMFreq(50)                        # Set frequency to 60 Hz
+				print "now enter the % of throttle you need"
+				while 1:
+					try:
+						foo = raw_input("procent: ")
+						if int(foo) > 100:
+							break
+						value = (int(foo) * 450 / 100) + 150
+						pwm.setPWM(0, 0, value)
+						pwm.setPWM(1, 0, value)
+						pwm.setPWM(2, 0, value)
+						pwm.setPWM(3, 0, value)
+						del foo
+					except:
+						print "Try again"
+				print "Done...."
 			
 def NetworkSoket(status):
 	logging.debug('Starting Up Networks socket')
@@ -215,9 +272,9 @@ def CAM(status):
 status={}
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', filename='/var/log/copter.log',level=logging.DEBUG)
 logging.debug('Main: Started Up')
-status["debug"] = 1
+status["debug"] = 0
 status["start"] = 1
-status["throttle"] = 40
+status["throttle"] = 15
 # check stare of vpn tunnel MUST be online
 
 try:
@@ -228,6 +285,10 @@ try:
 	thread.start_new_thread( ReadInput, (status, ) )
 	thread.start_new_thread( CAM, (status, ) )
 	thread.start_new_thread( NetworkSoket, (status, ) )
+	while status["start"]:
+		time.sleep(5)
+	time.sleep(1)
+	quit()
 except:
 	logging.warning('Main: WARNNG a thread gave back some error')
 
