@@ -11,6 +11,52 @@ import math
 from Adafruit_PWM_Servo_Driver import PWM
 import socket
 
+
+class PropCalc():
+	def __init__(self, prop, status):
+		print("Class Initiated to calc prop value")
+		self.prop = prop
+		self.servoMin = 230  # Min pulse length out of 4096 == 1ms Pulse
+		self.servoMax = 650  # Max pulse length out of 4096 == 2ms Pulse
+		self.gyro = [[0,0,0,0,0,0],[0,0,0,0,0,0]]
+		self.status = status
+
+	def filterValues(self, axis):
+		del self.gyro[axis][0]
+		self.gyro[axis].append(self.status["gyro-y"])
+		y = 0
+		for i in self.gyro[axis]:
+			y += i
+		filteredValue /= len(self.gyro[axis])
+		return filteredValue
+
+	def propValue(self, measurement, filtered)
+		if measurement < filtered:
+			filtered /= 4
+		else:
+			if fltered > 0:
+				filtered /= 2
+			else:
+				filtered = 0
+		return filtered
+
+	def value(self):
+		print("Give back values")
+		print "CalcProps gestartet"
+		
+		xFiltered = propValue(filterValues(0), status["gyro-x"])		
+		yFiltered = propValue(filterValues(1), status["gyro-y"]) 		
+
+		if self.prop == 0:
+			self.status["PropValue"][self.prop] = ((xFiltered + yFiltered)/2) + self.servoMin + self.status["throttle"]
+		elif self.prop == 1:
+			self.status["PropValue"][self.prop] = ((xFiltered + (yFiltered*-1))/2) + self.servoMin + self.status["throttle"]
+		elif self.prop == 2:
+			self.status["PropValue"][self.prop] = (((xFiltered*-1) + yFiltered)/2) + self.servoMin + self.status["throttle"]
+		elif self.prop == 3:
+			self.status["PropValue"][self.prop] = (((xFiltered*-1) + (yFiltered*-1))/2) + self.servoMin + self.status["throttle"]
+		return
+
 def ReadSensor(status):
 	SETTINGS_FILE = "RTIMULib"
 	
@@ -32,18 +78,18 @@ def ReadSensor(status):
 	poll_interval = imu.IMUGetPollInterval()
 	#print("Recommended Poll Interval: %dmS\n" % poll_interval)
 	logging.debug('ReadSensor, Thread started')
+	if imu.IMURead(): #check if gyro can be read
+		pass
+	else:
+		return
 	while status["start"]:
-		if imu.IMURead():
-			# x, y, z = imu.getFusionData()
-			tmpgyrox = math.degrees(imu.getIMUData()["fusionPose"][0])
-			tmpgyroy = math.degrees(imu.getIMUData()["fusionPose"][1])
-			tmpgyroz = math.degrees(imu.getIMUData()["fusionPose"][2])
-			status["gyro-x"] = tmpgyrox
-			status["gyro-y"] = tmpgyroy
-			status["gyro-z"] = tmpgyroz
-			if (status["gyro-y"] > 35) or status["gyro-y"] < -35: 
-				status["start"] = 0
-				print "Emergency stop!"
+		# x, y, z = imu.getFusionData()
+		status["gyro-x"] = math.degrees(imu.getIMUData()["fusionPose"][0])
+		status["gyro-y"] = math.degrees(imu.getIMUData()["fusionPose"][1])
+		status["gyro-z"] = math.degrees(imu.getIMUData()["fusionPose"][2])
+		if (status["gyro-y"] > 35) or status["gyro-y"] < -35 or status["gyro-x"] > 35 or status["gyro-x"] < -35: 
+			status["start"] = 0
+			print "Emergency stop!"
 
 		
 		#time.sleep(0.001)
@@ -72,57 +118,31 @@ def PrintData(status):
 			#print str(i) + " :" + str(status[i])
 
 def CalcProps(status):
-	servoMin = 230  # Min pulse length out of 4096
-	servoMax = 650  # Max pulse length out of 4096
-	print "CalcProps gestartet"
-	time.sleep(1)
-	gyroy = [0,0,0,0,0,0]
-	try:
-		while status["start"]:
-			del gyroy[0]
-			gyroy.append(status["gyro-y"])
-			y = 0
-			for i in gyroy:
-				y += i
-			y /= len(gyroy)
-			
-			vr = y
 
-			vl = y * -1
+	#
+	# This is the chema of the Quadcopter. This can be used for all copters with Prop count div by 4
+	#
+	#	flight direction
+	#	 0		 1
+	#	   \          /
+	#            \      /	
+	#		Q
+	#            /      \	
+	#	   /          \
+	#	 2		 3
+	#		rear
+	#
+	#
 
-			if status["gyro-y"] < vr:
-				vr /= 4
-			else:
-				if vr > 0:
-					vr /= 2
-				else:
-					vr = 0
-			if (status["gyro-y"] * -1) < vl:
-				vl /= 4
-			else:
-				if vl > 0:
-					vl /= 2 
-				else:
-					vl = 0
-			#print str(vl) + "...." + str(status["gyro-y"] * -1) + "::::::" + str(vr) + "...." + str(status["gyro-y"])
-			hr = 0
-			hl = 0
-
-			if status["throttle"] < 0:
-				status["throttle"] = 0
-
-			prop1 = vr + servoMin + status["throttle"]
-			prop2 = vl + servoMin + status["throttle"]
-			prop3 = hr + servoMin + status["throttle"] * 0
-			prop4 = hl + servoMin + status["throttle"] * 0
-			status["PropValue"] = [prop1, prop2, prop3, prop4]
-			#logging.debug("valuey: " + str(valuey) + " ,resulting to prop2: " + str(prop2))
-			#logging.debug( "1: " + str(status["PropValue"][0])  + " 2: " + str(status["PropValue"][1])+ " 3: " + str(status["PropValue"][2]) + " 4: " + str(status["PropValue"][3]))
-			time.sleep(0.001)
-		return
-	except:
-		print "Fuck!!"
-		raise
+	CountOfProps = 4
+	propInstances = []
+	for i in range(CountOfProps): #will return 0-3
+		propInstances.appen(PropCalc(i, status))
+	while status["start"]:
+		for i in propInstances:
+			i.value()
+		time.sleep(0.001)
+		
 
 def ControlProps(status):
 	logging.debug('ReadSensor, Thread ControlProps')
