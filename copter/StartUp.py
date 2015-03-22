@@ -4,12 +4,12 @@ import sys, getopt
 import thread
 import time
 import logging
-sys.path.append('.')
 import RTIMU
 import os.path
 import math
 from Adafruit_PWM_Servo_Driver import PWM
 import socket
+sys.path.append('.')
 
 
 class PropCalc():
@@ -21,7 +21,7 @@ class PropCalc():
 		self.gyro = [[0,0,0,0,0,0],[0,0,0,0,0,0]]
 		self.status = status
 
-	def filterValues(self, axis):
+	def __filterValues(self, axis):
 		del self.gyro[axis][0]
 		self.gyro[axis].append(self.status["gyro-y"])
 		y = 0
@@ -30,7 +30,7 @@ class PropCalc():
 		filteredValue /= len(self.gyro[axis])
 		return filteredValue
 
-	def propValue(self, measurement, filtered)
+	def __propValue(self, measurement, filtered):
 		if measurement < filtered:
 			filtered /= 4
 		else:
@@ -44,8 +44,8 @@ class PropCalc():
 		print("Give back values")
 		print "CalcProps gestartet"
 		
-		xFiltered = propValue(filterValues(0), status["gyro-x"])		
-		yFiltered = propValue(filterValues(1), status["gyro-y"]) 		
+		xFiltered = __propValue(__filterValues(0), status["gyro-x"])		
+		yFiltered = __propValue(__filterValues(1), status["gyro-y"]) 		
 
 		if self.prop == 0:
 			self.status["PropValue"][self.prop] = ((xFiltered + yFiltered)/2) + self.servoMin + self.status["throttle"]
@@ -160,8 +160,8 @@ def ControlProps(status):
 				time.sleep(0.002) #makes no sence to control prop more often with 50Hz
 				pwm.setPWM(0, 0, int(status["PropValue"][0]))
 				pwm.setPWM(1, 0, int(status["PropValue"][1]))
-				#pwm.setPWM(2, 0, int(status["PropValue"][2]))
-				#pwm.setPWM(3, 0, int(status["PropValue"][3]))
+				pwm.setPWM(2, 0, int(status["PropValue"][2]))
+				pwm.setPWM(3, 0, int(status["PropValue"][3]))
 
 		print "Stopping Motors"
 		pwm.setPWM(0, 0, 180)
@@ -282,7 +282,7 @@ def NetworkSoket(status):
 		data = data.rstrip()
 		print data
 		if not data:
-		    break
+            break
 		reply = "invalid\n\n"
 		if data == "stop":
 			reply = "OK...\n\n"
@@ -301,28 +301,32 @@ def CAM(status):
 		#logging.debug('CAM, Loop')
 	return
 
-status={}
-logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', filename='/var/log/copter.log',level=logging.DEBUG)
-logging.debug('Main: Started Up')
-status["debug"] = 0
-status["start"] = 1
-status["throttle"] = 15
-status["pitch"] = 0
-# check stare of vpn tunnel MUST be online
 
-try:
-	thread.start_new_thread( ReadSensor, (status, ) )
-	thread.start_new_thread( CalcProps, (status, ) )
-	#thread.start_new_thread( PrintData, (status, ) )
-	thread.start_new_thread( ControlProps, (status, ) )
-	thread.start_new_thread( ReadInput, (status, ) )
-	thread.start_new_thread( CAM, (status, ) )
-	thread.start_new_thread( NetworkSoket, (status, ) )
-	while status["start"]:
-		time.sleep(5)
-	time.sleep(1)
-	quit()
-except:
-	logging.warning('Main: WARNNG a thread gave back some error')
-	quit()
+
+def __init__():
+
+	status={}
+	logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', filename='/var/log/copter.log',level=logging.DEBUG)
+	logging.debug('Main: Started Up')
+	status["debug"] = 0
+	status["start"] = 1
+	status["throttle"] = 15
+	status["pitch"] = 0
+	# check stare of vpn tunnel MUST be online
+	
+	try:
+		thread.start_new_thread( ReadSensor, (status, ) )
+		thread.start_new_thread( CalcProps, (status, ) )
+		#thread.start_new_thread( PrintData, (status, ) )
+		thread.start_new_thread( ControlProps, (status, ) )
+		thread.start_new_thread( ReadInput, (status, ) )
+		thread.start_new_thread( CAM, (status, ) )
+		thread.start_new_thread( NetworkSoket, (status, ) )
+		while status["start"]:
+			time.sleep(5)
+		time.sleep(1)
+		quit()
+	except:
+		logging.warning('Main: WARNNG a thread gave back some error')
+		quit()
 
